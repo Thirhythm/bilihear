@@ -49,4 +49,4 @@ lib/
 ```
 
 > [!NOTE]
-> release 打包时请自行配置签名，详见 https://docs.flutter.cn/deployment/android/#add-a-launcher-icon 。
+> release 打包时请自行配置签名，详见 https://docs.flutter.cn/deployment/android/ 。
