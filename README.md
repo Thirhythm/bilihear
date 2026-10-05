@@ -2,7 +2,7 @@
 
 基于哔哩哔哩的在线音乐播放器（Flutter / Android）。
 
-> [!INFO]
+> [!NOTE]
 > 应用功能均基于哔哩哔哩官方 API 开发，不会将用户的数据披露给第三方。
 
 ## 功能
@@ -48,5 +48,5 @@ lib/
 └── theme/                    Material 3 主题
 ```
 
-> [!INFO]
+> [!NOTE]
 > release 打包时请自行配置签名，详见 https://docs.flutter.cn/deployment/android/#add-a-launcher-icon。
