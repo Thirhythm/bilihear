@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Flutter turns on R8 resource shrinking for release builds
+  (shrinkResources = true), which deletes every resource that no code or XML
+  references directly. audio_service resolves the media notification's small
+  icon and its playback control icons at runtime by name through
+  Resources.getIdentifier(), so the shrinker cannot see them and strips them.
+  A notification without a small icon makes NotificationManager.notify() throw
+  "Invalid notification (no valid small icon)" on the main thread, which kills
+  the process as soon as the notification is refreshed - that is, when the
+  track changes. Keep the resources that are only looked up by name.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@mipmap/ic_launcher,@drawable/audio_service_*" />

@@ -1,0 +1,38 @@
+import 'package:bilihear/features/settings/about_page.dart';
+import 'package:bilihear/state/settings_controller.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+/// App preferences, reachable from 我的.
+class SettingsPage extends ConsumerWidget {
+  const SettingsPage({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final autoOpenPlayer = ref.watch(autoOpenPlayerProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('设置')),
+      body: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          SwitchListTile(
+            secondary: const Icon(Icons.play_circle_outline_rounded),
+            title: const Text('点击曲目后自动打开播放器'),
+            value: autoOpenPlayer,
+            onChanged: (value) =>
+                ref.read(autoOpenPlayerProvider.notifier).setEnabled(value),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.info_outline_rounded),
+            title: const Text('关于'),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => const AboutPage())),
+          ),
+        ],
+      ),
+    );
+  }
+}

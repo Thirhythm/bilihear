@@ -1,0 +1,40 @@
+name: bilihear
+description: "哔哩哔哩在线音乐播放器"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  audio_service: ^0.18.19
+  audio_session: ^0.2.4
+  cached_network_image: ^4.0.4
+  crypto: ^3.0.7
+  dio: ^5.11.1
+  flutter:
+    sdk: flutter
+  flutter_launcher_icons: ^0.14.4
+  flutter_localizations:
+    sdk: flutter
+  flutter_riverpod: ^3.4.3
+  intl: ^0.20.3
+  just_audio: ^0.10.6
+  marquee: ^2.3.0
+  qr_flutter: ^4.1.0
+  shared_preferences: ^2.5.5
+  url_launcher: ^6.3.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  image_path: "assets/icon/ic_launcher.png"
+  adaptive_icon_background: "#FFFFFF"  # 背景色或图片路径
+  adaptive_icon_foreground: "assets/icon/ic_launcher_foreground.png"  # 前景图片
