@@ -26,24 +26,28 @@ class SettingsPage extends ConsumerWidget {
                 ref.read(autoOpenPlayerProvider.notifier).setEnabled(value),
           ),
           const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
-              '深色模式',
-              style: Theme.of(context).textTheme.titleSmall
-                  ?.copyWith(color: Theme.of(context).colorScheme.primary),
+          ListTile(
+            leading: const Icon(Icons.dark_mode_outlined),
+            title: const Text('深色模式'),
+            trailing: DropdownButtonHideUnderline(
+              child: DropdownButton<AppThemeMode>(
+                value: themeMode,
+                borderRadius: BorderRadius.circular(12),
+                onChanged: (mode) {
+                  if (mode != null) {
+                    ref.read(themeModeProvider.notifier).setMode(mode);
+                  }
+                },
+                items: [
+                  for (final mode in AppThemeMode.values)
+                    DropdownMenuItem<AppThemeMode>(
+                      value: mode,
+                      child: Text(mode.label),
+                    ),
+                ],
+              ),
             ),
           ),
-          for (final mode in AppThemeMode.values)
-            ListTile(
-              leading: Icon(_iconFor(mode)),
-              title: Text(mode.label),
-              trailing: mode == themeMode
-                  ? const Icon(Icons.check_rounded)
-                  : null,
-              selected: mode == themeMode,
-              onTap: () => ref.read(themeModeProvider.notifier).setMode(mode),
-            ),
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.info_outline_rounded),
@@ -57,9 +61,3 @@ class SettingsPage extends ConsumerWidget {
     );
   }
 }
-
-IconData _iconFor(AppThemeMode mode) => switch (mode) {
-  AppThemeMode.system => Icons.brightness_auto_outlined,
-  AppThemeMode.light => Icons.light_mode_outlined,
-  AppThemeMode.dark => Icons.dark_mode_outlined,
-};

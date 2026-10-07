@@ -30,15 +30,12 @@ Widget _wrap(SharedPreferences prefs, Widget home) => ProviderScope(
   child: MaterialApp(home: home),
 );
 
-/// Title of the row the settings page marks as the active brightness.
-String? _selectedThemeLabel(WidgetTester tester) {
-  final selected = tester
-      .widgetList<ListTile>(find.byType(ListTile))
-      .where((tile) => tile.selected)
-      .toList();
-  expect(selected, hasLength(1));
-  return (selected.single.title! as Text).data;
-}
+/// The brightness the settings dropdown currently shows.
+AppThemeMode? _themeDropdownValue(WidgetTester tester) => tester
+    .widget<DropdownButton<AppThemeMode>>(
+      find.byType(DropdownButton<AppThemeMode>),
+    )
+    .value;
 
 void main() {
   test('a stored brightness falls back to the system when unknown', () {
@@ -76,19 +73,21 @@ void main() {
     );
   });
 
-  testWidgets('the theme mode option defaults to the system and is persisted', (
+  testWidgets('the theme dropdown defaults to the system and is persisted', (
     tester,
   ) async {
     final prefs = await _freshPrefs();
     await tester.pumpWidget(_wrap(prefs, const SettingsPage()));
     await tester.pumpAndSettle();
 
-    expect(_selectedThemeLabel(tester), AppThemeMode.system.label);
+    expect(_themeDropdownValue(tester), AppThemeMode.system);
 
-    await tester.tap(find.text(AppThemeMode.dark.label));
+    await tester.tap(find.byType(DropdownButton<AppThemeMode>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(AppThemeMode.dark.label).last);
     await tester.pumpAndSettle();
 
-    expect(_selectedThemeLabel(tester), AppThemeMode.dark.label);
+    expect(_themeDropdownValue(tester), AppThemeMode.dark);
     expect(SettingsRepository(prefs).loadThemeMode(), AppThemeMode.dark);
     expect(AppTheme.modeOf(AppThemeMode.dark), ThemeMode.dark);
 
@@ -97,7 +96,7 @@ void main() {
     await tester.pumpWidget(_wrap(prefs, const SettingsPage()));
     await tester.pumpAndSettle();
 
-    expect(_selectedThemeLabel(tester), AppThemeMode.dark.label);
+    expect(_themeDropdownValue(tester), AppThemeMode.dark);
   });
 
   testWidgets('我的 leads to the settings page and on to 关于', (tester) async {
