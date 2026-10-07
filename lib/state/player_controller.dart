@@ -107,6 +107,12 @@ class PlayerController extends Notifier<PlayerState> {
 
   Future<void> pause() => _service.pause();
 
+  /// Queues [track] right after the current one.
+  ///
+  /// Returns `false` when [track] is the entry playing already, which has no
+  /// next to be moved ahead of.
+  Future<bool> addToNext(MediaTrack track) => _service.insertNext(track);
+
   Future<void> next() => _service.next();
 
   Future<void> previous() => _service.previous();

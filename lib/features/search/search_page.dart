@@ -1,6 +1,7 @@
 import 'package:bilihear/features/player/player_navigation.dart';
 import 'package:bilihear/state/player_controller.dart';
 import 'package:bilihear/state/search_controller.dart';
+import 'package:bilihear/widgets/track_action_menu.dart';
 import 'package:bilihear/widgets/track_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -114,6 +115,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                 if (!context.mounted) return;
                 await openPlayerIfEnabled(context, ref);
               },
+              onLongPress: (index) =>
+                  showTrackActions(context, ref, track: state.results[index]),
             ),
     );
   }
@@ -159,12 +162,14 @@ class _SearchBody extends StatelessWidget {
     required this.scrollController,
     required this.onRetry,
     required this.onPlay,
+    required this.onLongPress,
   });
 
   final SearchState state;
   final ScrollController scrollController;
   final VoidCallback onRetry;
   final void Function(int index) onPlay;
+  final void Function(int index) onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -214,6 +219,7 @@ class _SearchBody extends StatelessWidget {
         return TrackTile(
           track: state.results[index],
           onTap: () => onPlay(index),
+          onLongPress: () => onLongPress(index),
         );
       },
     );

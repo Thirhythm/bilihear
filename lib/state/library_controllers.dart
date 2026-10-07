@@ -5,6 +5,7 @@ import 'package:bilihear/core/models/media_track.dart';
 import 'package:bilihear/core/models/paged_result.dart';
 import 'package:bilihear/data/repositories/history_repository.dart';
 import 'package:bilihear/state/auth_controller.dart';
+import 'package:bilihear/state/local_favorites_controller.dart';
 import 'package:bilihear/state/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -50,6 +51,27 @@ final favStatusProvider = FutureProvider.family<bool, int>((ref, aid) async {
   );
   if (!loggedIn || aid <= 0) return false;
   return ref.read(favRepositoryProvider).isFavoured('$aid');
+}, isAutoDispose: true);
+
+/// Whether [track] is in the collection matching the current session: the
+/// Bilibili favourite folders when signed in, the on-device list otherwise.
+///
+/// Signed-out playback still needs a favourite indicator, but
+/// [favStatusProvider] only knows about the cloud folders and resolves to
+/// `false` without a session, so the local list has to be consulted directly.
+final trackFavouredProvider = Provider.family<bool, MediaTrack>((ref, track) {
+  final loggedIn = ref.watch(
+    authControllerProvider.select((state) => state.isLoggedIn),
+  );
+  if (!loggedIn) {
+    return ref.watch(
+      localFavoritesProvider.select(
+        (tracks) => tracks.any((item) => item.partKey == track.partKey),
+      ),
+    );
+  }
+  if (track.aid <= 0) return false;
+  return ref.watch(favStatusProvider(track.aid)).value ?? false;
 }, isAutoDispose: true);
 
 // --- Contents of one folder ----------------------------------------------

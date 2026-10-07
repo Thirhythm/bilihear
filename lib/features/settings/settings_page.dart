@@ -28,7 +28,7 @@ class SettingsPage extends ConsumerWidget {
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.dark_mode_outlined),
-            title: const Text('深色模式'),
+            title: const Text('显示模式'),
             trailing: DropdownButtonHideUnderline(
               child: DropdownButton<AppThemeMode>(
                 value: themeMode,

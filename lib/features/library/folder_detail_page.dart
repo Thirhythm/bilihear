@@ -6,6 +6,7 @@ import 'package:bilihear/state/library_controllers.dart';
 import 'package:bilihear/state/player_controller.dart';
 import 'package:bilihear/state/providers.dart';
 import 'package:bilihear/widgets/player_scaffold.dart';
+import 'package:bilihear/widgets/track_action_menu.dart';
 import 'package:bilihear/widgets/track_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -147,7 +148,14 @@ class _FolderDetailPageState extends ConsumerState<FolderDetailPage> {
                       if (!context.mounted) return;
                       await openPlayerIfEnabled(context, ref);
                     },
-                    onLongPress: () => _removeTrack(track),
+                    onLongPress: () => showTrackActions(
+                      context,
+                      ref,
+                      track: track,
+                      showFavorite: false,
+                      deleteLabel: '移出收藏夹',
+                      onDelete: () => _removeTrack(track),
+                    ),
                   );
                 },
               ),

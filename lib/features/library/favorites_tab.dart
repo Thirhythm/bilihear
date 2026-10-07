@@ -6,6 +6,7 @@ import 'package:bilihear/state/local_favorites_controller.dart';
 import 'package:bilihear/state/player_controller.dart';
 import 'package:bilihear/widgets/folder_tile.dart';
 import 'package:bilihear/widgets/local_data_banner.dart';
+import 'package:bilihear/widgets/track_action_menu.dart';
 import 'package:bilihear/widgets/track_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -96,7 +97,14 @@ class _LocalFavorites extends ConsumerWidget {
             if (!context.mounted) return;
             await openPlayerIfEnabled(context, ref);
           },
-          onLongPress: () => _confirmRemove(context, ref, track),
+          onLongPress: () => showTrackActions(
+            context,
+            ref,
+            track: track,
+            showFavorite: false,
+            deleteLabel: '移出收藏夹',
+            onDelete: () => _confirmRemove(context, ref, track),
+          ),
         );
       },
     );
@@ -111,7 +119,7 @@ class _LocalFavorites extends ConsumerWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('取消收藏'),
+        title: const Text('移出收藏夹'),
         content: Text('确定将「${track.displayTitle}」移出本地收藏夹吗？'),
         actions: [
           TextButton(

@@ -1,10 +1,7 @@
 import 'dart:math' as math;
 
-import 'package:bilihear/core/models/media_track.dart';
 import 'package:bilihear/core/utils/formatters.dart';
-import 'package:bilihear/state/auth_controller.dart';
 import 'package:bilihear/state/library_controllers.dart';
-import 'package:bilihear/state/local_favorites_controller.dart';
 import 'package:bilihear/state/player_controller.dart';
 import 'package:bilihear/widgets/cover_image.dart';
 import 'package:bilihear/widgets/favorite_sheet.dart';
@@ -23,7 +20,9 @@ class PlayerPage extends ConsumerWidget {
     final state = ref.watch(playerStateProvider);
     final track = state.currentTrack;
     final controller = ref.read(playerStateProvider.notifier);
-    final favoured = track == null ? false : _isFavoured(ref, track);
+    final favoured = track == null
+        ? false
+        : ref.watch(trackFavouredProvider(track));
 
     return Scaffold(
       appBar: AppBar(
@@ -129,27 +128,6 @@ class PlayerPage extends ConsumerWidget {
             ),
     );
   }
-}
-
-/// Whether [track] belongs to the collection that matches the current session:
-/// the Bilibili favourite folders when signed in, the on-device list otherwise.
-///
-/// Signed-out playback still needs a favourite indicator, but
-/// [favStatusProvider] only knows about the cloud folders and resolves to
-/// `false` without a session, so the local list has to be consulted directly.
-bool _isFavoured(WidgetRef ref, MediaTrack track) {
-  final loggedIn = ref.watch(
-    authControllerProvider.select((auth) => auth.isLoggedIn),
-  );
-  if (!loggedIn) {
-    return ref.watch(
-      localFavoritesProvider.select(
-        (tracks) => tracks.any((item) => item.partKey == track.partKey),
-      ),
-    );
-  }
-  if (track.aid <= 0) return false;
-  return ref.watch(favStatusProvider(track.aid)).value ?? false;
 }
 
 class _Controls extends StatelessWidget {

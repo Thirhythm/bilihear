@@ -138,6 +138,39 @@ class BiliAudioService extends BaseAudioHandler with SeekHandler {
     await _playAt(index);
   }
 
+  /// Queues [track] to play directly after the current entry.
+  ///
+  /// A track the queue already holds is moved rather than added, so an entry
+  /// never appears twice — including the queue that consists of the current
+  /// entry alone, where there is no next to move ahead of. Returns `false` when
+  /// nothing had to be queued because [track] is the entry playing right now.
+  Future<bool> insertNext(MediaTrack track) async {
+    if (_queue.isEmpty || _currentIndex < 0) {
+      // Nothing is loaded that could come next, so the request simply becomes
+      // the queue and starts playing right away.
+      await setQueue([track]);
+      return false;
+    }
+    final plan = planPlayNext(_queue, _currentIndex, track);
+    if (plan == null) return false;
+
+    _queue = plan.queue;
+    _currentIndex = plan.currentIndex;
+    _rebuildShuffleOrder(lead: _currentIndex);
+    final queued = _currentIndex + 1;
+    if (_mode.isShuffle) {
+      // In shuffle the successor comes from the order, not the list, so the
+      // queued entry is lifted right behind the current one there as well.
+      _shuffleOrder
+        ..remove(queued)
+        ..insert(_shuffleOrder.indexOf(_currentIndex) + 1, queued);
+    }
+    _broadcastQueue();
+    _persist();
+    _emit();
+    return true;
+  }
+
   /// Skips to the next track according to the current [PlayMode].
   Future<void> next() => _playNext();
 
@@ -544,4 +577,34 @@ class BiliAudioService extends BaseAudioHandler with SeekHandler {
     );
     await _prefs.setInt(_indexKey, _currentIndex);
   }
+}
+
+/// Reordered queue together with the index the current entry ends up at.
+typedef PlayNextPlan = ({List<MediaTrack> queue, int currentIndex});
+
+/// Rewrites [queue] so the entry [track] plays directly after the entry at
+/// [currentIndex], moving it there when the queue already holds that video
+/// part.
+///
+/// Returns `null` when the request cannot change anything: [track] is the entry
+/// that is playing, which cannot be moved behind itself.
+PlayNextPlan? planPlayNext(
+  List<MediaTrack> queue,
+  int currentIndex,
+  MediaTrack track,
+) {
+  assert(currentIndex >= 0 && currentIndex < queue.length);
+  final existing = queue.indexWhere((item) => item.partKey == track.partKey);
+  if (existing == currentIndex) return null;
+
+  final next = List.of(queue);
+  if (existing < 0) {
+    next.insert(currentIndex + 1, track);
+    return (queue: next, currentIndex: currentIndex);
+  }
+  final moved = next.removeAt(existing);
+  // Taking an entry from before the current one shifts that one down a slot.
+  final index = existing < currentIndex ? currentIndex - 1 : currentIndex;
+  next.insert(index + 1, moved);
+  return (queue: next, currentIndex: index);
 }
