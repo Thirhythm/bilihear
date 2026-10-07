@@ -31,7 +31,7 @@ class AccountCard extends ConsumerWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: user == null
-            ? _LoggedOut(onLogin: () => _openLogin(context))
+            ? _LoggedOut(onLogin: () => _openLogin(context, ref))
             : _LoggedIn(
                 user: user,
                 onLogout: () => _confirmLogout(context, ref),
@@ -40,9 +40,13 @@ class AccountCard extends ConsumerWidget {
     );
   }
 
-  static void _openLogin(BuildContext context) => Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => const LoginPage()),
-  );
+  /// Opens the login page, starting a fresh phone-login attempt.
+  static void _openLogin(BuildContext context, WidgetRef ref) {
+    ref.read(smsLoginProvider.notifier).reset();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const LoginPage()),
+    );
+  }
 
   /// Asks for confirmation, then drops the session.
   ///

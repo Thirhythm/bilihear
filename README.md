@@ -8,9 +8,9 @@
 ## 功能
 
 - [x] 音频播放
-- [ ] 账号登录
+- [x] 账号登录
+  - [x] 手机号验证登录
   - [x] 二维码登录
-  - [ ] 手机号验证登录
 - [x] 收藏夹
 - [x] 历史记录
 - [x] Android 媒体控制
@@ -23,7 +23,7 @@
 ## 技术栈
 
 - **状态管理**：[flutter_riverpod](https://pub.dev/packages/flutter_riverpod) 3.x（`Notifier` / `AsyncNotifier`，无代码生成）
-- **网络**：`dio` + 自实现 Cookie Jar（`SharedPreferences` 持久化）+ WBI 签名
+- **网络**：`dio` + 自实现 Cookie Jar（`SharedPreferences` 持久化）+ WBI 签名 + 极验人机验证（`webview_flutter`）
 - **播放**：`just_audio`（仅加载音频流）
 - **后台与通知**：`audio_service`（Android 前台服务 + MediaStyle 通知）
 - **音频焦点**：`audio_session`

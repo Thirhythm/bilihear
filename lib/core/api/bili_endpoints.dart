@@ -21,6 +21,12 @@ abstract final class BiliEndpoints {
   static const String qrGenerate = '/x/passport-login/web/qrcode/generate';
   static const String qrPoll = '/x/passport-login/web/qrcode/poll';
 
+  // --- Phone (SMS) login --------------------------------------------------
+  /// Geetest challenge required before a verification code can be sent.
+  static const String captcha = '/x/passport-login/captcha';
+  static const String smsSend = '/x/passport-login/web/sms/send';
+  static const String smsLogin = '/x/passport-login/web/login/sms';
+
   // --- Search -------------------------------------------------------------
   static const String searchType = '/x/web-interface/wbi/search/type';
   static const String searchSuggest = '/main/suggest';

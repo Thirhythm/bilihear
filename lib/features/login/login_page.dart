@@ -1,100 +1,48 @@
+import 'package:bilihear/features/login/geetest_view.dart';
+import 'package:bilihear/features/login/qr_login_view.dart';
+import 'package:bilihear/features/login/sms_login_view.dart';
 import 'package:bilihear/state/auth_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
-/// QR code login against the Bilibili web passport.
+/// Login entry point.
+///
+/// Phone verification is the default; scanning a QR code remains available for
+/// accounts that cannot receive SMS codes.
 class LoginPage extends ConsumerWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.captchaBuilder = buildGeetestView});
+
+  /// Builds the captcha widget; overridable so widget tests can run without a
+  /// WebView platform.
+  final CaptchaBuilder captchaBuilder;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(qrLoginProvider);
-
-    ref.listen(qrLoginProvider, (previous, next) {
-      if (next.status == QrStatus.success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('登录成功')),
-        );
-        Navigator.of(context).maybePop();
-      }
-    });
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('登录哔哩哔哩')),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _QrArea(state: state),
-              const SizedBox(height: 24),
-              Text(
-                _statusText(state),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 24),
-              if (state.status == QrStatus.expired ||
-                  state.status == QrStatus.failed)
-                FilledButton.icon(
-                  onPressed: () => ref.read(qrLoginProvider.notifier).start(),
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('刷新二维码'),
-                ),
-            ],
-          ),
-        ),
-      ),
+    // The captcha needs every pixel it can get, so the tab bar steps aside
+    // while it is being solved.
+    final verifying = ref.watch(
+      smsLoginProvider.select((state) => state.captcha != null),
     );
-  }
 
-  String _statusText(QrLoginViewState state) => switch (state.status) {
-    QrStatus.loading => '正在获取二维码…',
-    QrStatus.waiting => '请使用哔哩哔哩客户端扫描二维码',
-    QrStatus.scanned => '扫描成功，请在手机上确认登录',
-    QrStatus.expired => '二维码已过期，请点击刷新',
-    QrStatus.success => '登录成功',
-    QrStatus.failed => state.message ?? '登录失败，请重试',
-  };
-}
-
-class _QrArea extends StatelessWidget {
-  const _QrArea({required this.state});
-
-  final QrLoginViewState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final content = state.qrContent;
-
-    if (state.status == QrStatus.success) {
-      return Icon(
-        Icons.check_circle_rounded,
-        size: 180,
-        color: scheme.primary,
-      );
-    }
-    if (content == null) {
-      return const SizedBox(
-        width: 220,
-        height: 220,
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: QrImageView(
-          data: content,
-          size: 200,
-          backgroundColor: Colors.white,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('登录哔哩哔哩'),
+          bottom: verifying
+              ? null
+              : const TabBar(
+                  tabs: [
+                    Tab(text: '手机号登录'),
+                    Tab(text: '扫码登录'),
+                  ],
+                ),
+        ),
+        body: TabBarView(
+          children: [
+            SmsLoginView(captchaBuilder: captchaBuilder),
+            const QrLoginView(),
+          ],
         ),
       ),
     );

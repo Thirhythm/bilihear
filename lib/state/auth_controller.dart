@@ -83,6 +83,232 @@ class AuthController extends Notifier<AuthState> {
   }
 }
 
+/// International dialling code used by the phone login. Only mainland China
+/// is supported, matching the web login page's default.
+const String smsDialCode = '86';
+
+/// Phone-login form state.
+class SmsLoginViewState {
+  const SmsLoginViewState({
+    this.tel = '',
+    this.code = '',
+    this.busy = false,
+    this.codeSent = false,
+    this.resendIn = 0,
+    this.captcha,
+    this.message,
+    this.succeeded = false,
+  });
+
+  /// Mainland numbers only: `1` followed by ten more digits.
+  static final RegExp _mainlandTel = RegExp(r'^1[3-9]\d{9}$');
+
+  /// Number typed by the user, without the dialling code.
+  final String tel;
+
+  /// SMS code typed by the user.
+  final String code;
+
+  /// `true` while a code request or the login itself is in flight.
+  final bool busy;
+
+  /// `true` once an SMS code has been sent successfully.
+  final bool codeSent;
+
+  /// Seconds left before the code may be requested again.
+  final int resendIn;
+
+  /// Challenge the user is currently solving, when the captcha is on screen.
+  final CaptchaChallenge? captcha;
+
+  /// Error or hint shown under the form.
+  final String? message;
+
+  /// `true` once the session has been established.
+  final bool succeeded;
+
+  bool get telValid => _mainlandTel.hasMatch(tel);
+
+  bool get canSendCode =>
+      !busy && captcha == null && resendIn == 0 && telValid;
+
+  bool get canSubmit => !busy && codeSent && code.length == 6;
+
+  SmsLoginViewState copyWith({
+    String? tel,
+    String? code,
+    bool? busy,
+    bool? codeSent,
+    int? resendIn,
+    CaptchaChallenge? captcha,
+    bool clearCaptcha = false,
+    String? message,
+    bool clearMessage = false,
+    bool? succeeded,
+  }) => SmsLoginViewState(
+    tel: tel ?? this.tel,
+    code: code ?? this.code,
+    busy: busy ?? this.busy,
+    codeSent: codeSent ?? this.codeSent,
+    resendIn: resendIn ?? this.resendIn,
+    captcha: clearCaptcha ? null : (captcha ?? this.captcha),
+    message: clearMessage ? null : (message ?? this.message),
+    succeeded: succeeded ?? this.succeeded,
+  );
+}
+
+final NotifierProvider<SmsLoginController, SmsLoginViewState> smsLoginProvider =
+    NotifierProvider<SmsLoginController, SmsLoginViewState>(
+      SmsLoginController.new,
+    );
+
+/// Drives phone login: geetest challenge → SMS code → session.
+class SmsLoginController extends Notifier<SmsLoginViewState> {
+  /// Seconds the resend action stays disabled, matching the web login page.
+  static const int resendDelay = 60;
+
+  Timer? _countdown;
+  String? _captchaKey;
+
+  @override
+  SmsLoginViewState build() {
+    ref.onDispose(() => _countdown?.cancel());
+    return const SmsLoginViewState();
+  }
+
+  void setTel(String value) {
+    if (state.tel != value) {
+      _set(state.copyWith(tel: value, clearMessage: true));
+    }
+  }
+
+  void setCode(String value) {
+    if (state.code != value) {
+      _set(state.copyWith(code: value, clearMessage: true));
+    }
+  }
+
+  /// Drops any previous attempt; called when the login page is opened.
+  void reset() {
+    _countdown?.cancel();
+    _captchaKey = null;
+    _set(const SmsLoginViewState());
+  }
+
+  /// Requests the geetest parameters and shows the captcha widget.
+  ///
+  /// Returns `false` after reporting the failure on [state].
+  Future<bool> startCaptcha() async {
+    _set(state.copyWith(busy: true, clearMessage: true, clearCaptcha: true));
+    try {
+      final challenge = await ref.read(authRepositoryProvider).createCaptcha();
+      _set(state.copyWith(busy: false, captcha: challenge));
+      return true;
+    } on BiliApiException catch (error) {
+      _set(state.copyWith(busy: false, message: error.message));
+      return false;
+    }
+  }
+
+  /// Hides the captcha, optionally reporting why it did not complete.
+  void endCaptcha({String? error}) {
+    _set(
+      state.copyWith(
+        busy: false,
+        clearCaptcha: true,
+        message: error,
+        clearMessage: error == null,
+      ),
+    );
+  }
+
+  /// Sends the SMS code using a solved geetest challenge.
+  Future<bool> sendCode({
+    required CaptchaChallenge captcha,
+    required String challenge,
+    required String validate,
+    required String seccode,
+  }) async {
+    _set(
+      state.copyWith(
+        busy: true,
+        clearCaptcha: true,
+        clearMessage: true,
+      ),
+    );
+    try {
+      final key = await ref.read(authRepositoryProvider).sendSmsCode(
+        cid: smsDialCode,
+        tel: state.tel,
+        captcha: captcha,
+        challenge: challenge,
+        validate: validate,
+        seccode: seccode,
+      );
+      _captchaKey = key;
+      _set(
+        state.copyWith(
+          busy: false,
+          codeSent: true,
+          resendIn: resendDelay,
+          clearMessage: true,
+        ),
+      );
+      _startCountdown();
+      return true;
+    } on BiliApiException catch (error) {
+      _set(state.copyWith(busy: false, message: error.message));
+      return false;
+    }
+  }
+
+  /// Submits the SMS code and reloads the account on success.
+  Future<bool> submitCode() async {
+    final key = _captchaKey;
+    if (key == null) {
+      _set(state.copyWith(message: '请先获取短信验证码'));
+      return false;
+    }
+    _set(state.copyWith(busy: true, clearMessage: true));
+    try {
+      await ref.read(authRepositoryProvider).loginWithSmsCode(
+        cid: smsDialCode,
+        tel: state.tel,
+        code: state.code,
+        captchaKey: key,
+      );
+      await ref.read(authControllerProvider.notifier).refresh();
+      _set(state.copyWith(busy: false, succeeded: true, clearMessage: true));
+      return true;
+    } on BiliApiException catch (error) {
+      _set(state.copyWith(busy: false, message: error.message));
+      return false;
+    }
+  }
+
+  void _startCountdown() {
+    _countdown?.cancel();
+    _countdown = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!ref.mounted) {
+        timer.cancel();
+        return;
+      }
+      final remaining = state.resendIn - 1;
+      if (remaining <= 0) {
+        timer.cancel();
+        _set(state.copyWith(resendIn: 0));
+      } else {
+        _set(state.copyWith(resendIn: remaining));
+      }
+    });
+  }
+
+  /// Publishes [next] unless the controller has been disposed meanwhile.
+  void _set(SmsLoginViewState next) {
+    if (ref.mounted) state = next;
+  }
+}
+
 /// Steps of the QR login flow shown by the login page.
 enum QrStatus { loading, waiting, scanned, expired, success, failed }
 

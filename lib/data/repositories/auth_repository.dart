@@ -24,9 +24,33 @@ class QrPollResult {
   final String? message;
 }
 
-/// Handles QR-code login, session inspection and logout.
+/// A geetest challenge that must be solved before an SMS code can be sent.
+class CaptchaChallenge {
+  const CaptchaChallenge({
+    required this.token,
+    required this.gt,
+    required this.challenge,
+  });
+
+  /// Login API token that has to be echoed back on `sms/send`.
+  final String token;
+
+  /// Geetest id used to initialise the widget.
+  final String gt;
+
+  /// Geetest challenge; the widget returns an updated one once solved.
+  final String challenge;
+}
+
+/// Handles QR-code and phone (SMS) login, session inspection and logout.
 class AuthRepository {
   AuthRepository(this._client);
+
+  /// `source` parameter the web login page sends upstream.
+  static const String loginSource = 'main_web';
+
+  /// Page the login API redirects to once the session is established.
+  static const String _loginGoUrl = 'https://www.bilibili.com';
 
   final BiliClient _client;
 
@@ -79,6 +103,112 @@ class AuthRepository {
     }
   }
 
+  /// Requests a fresh geetest challenge for phone login.
+  Future<CaptchaChallenge> createCaptcha() async {
+    final response = await _client.getJson(
+      BiliEndpoints.captcha,
+      baseUrl: BiliEndpoints.passportBase,
+      query: {'source': loginSource},
+    );
+    final data = JsonUtils.map(response['data']);
+    final geetest = JsonUtils.map(data['geetest']);
+    final token = JsonUtils.string(data['token']);
+    final gt = JsonUtils.string(geetest['gt']);
+    final challenge = JsonUtils.string(geetest['challenge']);
+    if (token.isEmpty || gt.isEmpty || challenge.isEmpty) {
+      throw const BiliApiException(
+        code: -1,
+        message: '无法获取人机验证参数，请稍后重试',
+        path: BiliEndpoints.captcha,
+      );
+    }
+    return CaptchaChallenge(token: token, gt: gt, challenge: challenge);
+  }
+
+  /// Sends an SMS code to [tel] and returns the `captcha_key` used to log in.
+  ///
+  /// [challenge], [validate] and [seccode] come from the solved geetest widget;
+  /// [cid] is the international dialling code of [tel].
+  Future<String> sendSmsCode({
+    required String cid,
+    required String tel,
+    required CaptchaChallenge captcha,
+    required String challenge,
+    required String validate,
+    required String seccode,
+  }) async {
+    try {
+      final response = await _client.postForm(
+        BiliEndpoints.smsSend,
+        {
+          'cid': cid,
+          'tel': tel,
+          'source': loginSource,
+          'token': captcha.token,
+          'challenge': challenge,
+          'validate': validate,
+          'seccode': seccode,
+        },
+        baseUrl: BiliEndpoints.passportBase,
+        requireLogin: false,
+      );
+      final key = JsonUtils.string(
+        JsonUtils.map(response['data'])['captcha_key'],
+      );
+      if (key.isEmpty) {
+        throw const BiliApiException(
+          code: -1,
+          message: '短信验证码发送失败，请稍后重试',
+          path: BiliEndpoints.smsSend,
+        );
+      }
+      return key;
+    } on BiliApiException catch (error) {
+      throw _smsError(error, BiliEndpoints.smsSend);
+    }
+  }
+
+  /// Completes phone login with the received [code] and stores the cookies.
+  ///
+  /// [captchaKey] is the value returned by [sendSmsCode].
+  Future<void> loginWithSmsCode({
+    required String cid,
+    required String tel,
+    required String code,
+    required String captchaKey,
+  }) async {
+    Map<String, dynamic> data;
+    try {
+      final response = await _client.postForm(
+        BiliEndpoints.smsLogin,
+        {
+          'cid': cid,
+          'tel': tel,
+          'code': code,
+          'source': loginSource,
+          'captcha_key': captchaKey,
+          'go_url': _loginGoUrl,
+          'keep': true,
+        },
+        baseUrl: BiliEndpoints.passportBase,
+        requireLogin: false,
+      );
+      data = JsonUtils.map(response['data']);
+    } on BiliApiException catch (error) {
+      throw _smsError(error, BiliEndpoints.smsLogin);
+    }
+    await _persistLoginCookies(data);
+    if (!_client.isLoggedIn) {
+      // A non-zero `status` means the account still needs a security check.
+      final status = JsonUtils.integer(data['status']);
+      throw BiliApiException(
+        code: status,
+        message: status == 0 ? '登录失败，请重试' : '账号需要额外安全验证，请稍后重试',
+        path: BiliEndpoints.smsLogin,
+      );
+    }
+  }
+
   /// Returns the signed-in account, or `null` when no session is active.
   Future<BiliUser?> fetchCurrentUser() async {
     final data = await _client.fetchNav();
@@ -112,6 +242,34 @@ class AuthRepository {
     } finally {
       await _client.cookies.clear();
     }
+  }
+
+  /// Upstream `message` values for the documented SMS codes are unreliable
+  /// (they are often `"0"`), so the common ones are translated locally.
+  static const Map<int, String> _smsErrors = {
+    1002: '手机号格式错误',
+    1003: '验证码已发送，请稍后重试',
+    1006: '短信验证码错误，请重新输入',
+    1007: '短信验证码已过期，请重新获取',
+    1025: '该手机号已被封禁，无法登录',
+    2400: '人机验证已过期，请重新验证',
+    2406: '人机验证失败，请重新验证',
+    86203: '短信发送次数已达上限，请稍后重试',
+  };
+
+  static BiliApiException _smsError(BiliApiException error, String path) {
+    final mapped = _smsErrors[error.code];
+    if (mapped != null) {
+      return BiliApiException(code: error.code, message: mapped, path: path);
+    }
+    if (error.message.isEmpty || error.message == '0') {
+      return BiliApiException(
+        code: error.code,
+        message: '操作失败，请稍后重试',
+        path: path,
+      );
+    }
+    return error;
   }
 
   /// The web login flow returns the session cookies via `Set-Cookie`
