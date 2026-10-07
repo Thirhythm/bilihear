@@ -1,9 +1,11 @@
+import 'package:bilihear/core/models/app_theme_mode.dart';
 import 'package:bilihear/data/repositories/settings_repository.dart';
 import 'package:bilihear/features/profile/profile_page.dart';
 import 'package:bilihear/features/settings/about_page.dart';
 import 'package:bilihear/features/settings/settings_page.dart';
 import 'package:bilihear/state/auth_controller.dart';
 import 'package:bilihear/state/providers.dart';
+import 'package:bilihear/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -28,7 +30,25 @@ Widget _wrap(SharedPreferences prefs, Widget home) => ProviderScope(
   child: MaterialApp(home: home),
 );
 
+/// Title of the row the settings page marks as the active brightness.
+String? _selectedThemeLabel(WidgetTester tester) {
+  final selected = tester
+      .widgetList<ListTile>(find.byType(ListTile))
+      .where((tile) => tile.selected)
+      .toList();
+  expect(selected, hasLength(1));
+  return (selected.single.title! as Text).data;
+}
+
 void main() {
+  test('a stored brightness falls back to the system when unknown', () {
+    expect(AppThemeMode.fromStorage(null), AppThemeMode.system);
+    expect(AppThemeMode.fromStorage('dark'), AppThemeMode.dark);
+    expect(AppThemeMode.fromStorage('sepia'), AppThemeMode.system);
+    expect(AppTheme.modeOf(AppThemeMode.light), ThemeMode.light);
+    expect(AppTheme.modeOf(AppThemeMode.system), ThemeMode.system);
+  });
+
   testWidgets('the auto open player switch defaults to off and is persisted', (
     tester,
   ) async {
@@ -54,6 +74,30 @@ void main() {
       tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
       isTrue,
     );
+  });
+
+  testWidgets('the theme mode option defaults to the system and is persisted', (
+    tester,
+  ) async {
+    final prefs = await _freshPrefs();
+    await tester.pumpWidget(_wrap(prefs, const SettingsPage()));
+    await tester.pumpAndSettle();
+
+    expect(_selectedThemeLabel(tester), AppThemeMode.system.label);
+
+    await tester.tap(find.text(AppThemeMode.dark.label));
+    await tester.pumpAndSettle();
+
+    expect(_selectedThemeLabel(tester), AppThemeMode.dark.label);
+    expect(SettingsRepository(prefs).loadThemeMode(), AppThemeMode.dark);
+    expect(AppTheme.modeOf(AppThemeMode.dark), ThemeMode.dark);
+
+    // A fresh provider container reads the stored value back.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(_wrap(prefs, const SettingsPage()));
+    await tester.pumpAndSettle();
+
+    expect(_selectedThemeLabel(tester), AppThemeMode.dark.label);
   });
 
   testWidgets('我的 leads to the settings page and on to 关于', (tester) async {

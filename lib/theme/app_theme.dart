@@ -1,3 +1,4 @@
+import 'package:bilihear/core/models/app_theme_mode.dart';
 import 'package:flutter/material.dart';
 
 /// Material 3 theme built around Bilibili's brand pink.
@@ -7,6 +8,13 @@ abstract final class AppTheme {
   static ThemeData light() => _build(Brightness.light);
 
   static ThemeData dark() => _build(Brightness.dark);
+
+  /// Translates the stored preference into the mode `MaterialApp` expects.
+  static ThemeMode modeOf(AppThemeMode preference) => switch (preference) {
+    AppThemeMode.system => ThemeMode.system,
+    AppThemeMode.light => ThemeMode.light,
+    AppThemeMode.dark => ThemeMode.dark,
+  };
 
   static ThemeData _build(Brightness brightness) {
     final scheme = ColorScheme.fromSeed(
