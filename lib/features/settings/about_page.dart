@@ -6,7 +6,7 @@ class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
   /// Keep in sync with `version` in pubspec.yaml.
-  static const String appVersion = '1.0.0';
+  static const String appVersion = '1.1.0';
 
   static const String developerName = 'Thirhythm';
 
