@@ -52,7 +52,7 @@ class SettingsPage extends ConsumerWidget {
           const Divider(height: 1),
           ListTile(
             leading: const Icon(Icons.equalizer_rounded),
-            title: const Text('均衡器'),
+            title: const Text('均衡器 (BETA)'),
             trailing: const Icon(Icons.chevron_right_rounded),
             onTap: () => Navigator.of(
               context,

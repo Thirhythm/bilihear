@@ -20,7 +20,7 @@ class EffectsPage extends ConsumerWidget {
     final settings = state.settings;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('均衡器')),
+      appBar: AppBar(title: const Text('均衡器 (BETA)')),
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [

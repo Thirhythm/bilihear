@@ -61,6 +61,12 @@ class BiliAudioService extends BaseAudioHandler
   /// Re-resolving a single track is allowed once after a playback error.
   static const int _maxAutoRetries = 1;
 
+  /// Steps of the gain fades that keep effect toggles click free.
+  static const int _effectFadeSteps = 6;
+
+  /// Delay between two fade steps, making for ~30ms per fade in total.
+  static const Duration _effectFadeStep = Duration(milliseconds: 5);
+
   final AndroidEqualizer _equalizer = AndroidEqualizer();
   final AndroidLoudnessEnhancer _loudnessEnhancer = AndroidLoudnessEnhancer();
   late final AudioPlayer _player = AudioPlayer(
@@ -77,6 +83,33 @@ class BiliAudioService extends BaseAudioHandler
 
   /// Last requested band gains, kept until there are bands to apply them to.
   List<double> _bandGains = const [];
+
+  /// Gains currently written to the platform bands; the fade source.
+  List<double> _appliedGains = const [];
+
+  /// Latest equalizer enable request; wins over in-flight transitions.
+  bool _equalizerEnabled = false;
+
+  /// Whether the platform equalizer is engaged instead of bypassed.
+  bool _equalizerEngaged = false;
+
+  /// Invalidates superseded band fades whenever a new transition starts.
+  int _bandFadeToken = 0;
+
+  /// Last requested loudness enhancer gain in decibels.
+  double _loudnessGain = 0.0;
+
+  /// Loudness gain currently written to the platform.
+  double _appliedLoudnessGain = 0.0;
+
+  /// Latest loudness enable request; wins over in-flight transitions.
+  bool _loudnessEnabled = false;
+
+  /// Whether the platform loudness enhancer is engaged instead of bypassed.
+  bool _loudnessEngaged = false;
+
+  /// Invalidates superseded loudness fades whenever a new transition starts.
+  int _loudnessFadeToken = 0;
 
   /// Whether the engine is loaded with the current queue entry. `false` while
   /// it still holds the silent warm-up source or nothing at all.
@@ -329,9 +362,33 @@ class BiliAudioService extends BaseAudioHandler
     );
   }
 
+  /// Engages or bypasses the equalizer without a click.
+  ///
+  /// Disabling fades the band gains to flat before bypassing, engaging enables
+  /// at flat and fades the requested gains in, so the switch never cuts a
+  /// non-flat curve mid-buffer (heard as a pop).
   @override
-  Future<void> setEqualizerEnabled(bool enabled) =>
-      _equalizer.setEnabled(enabled);
+  Future<void> setEqualizerEnabled(bool enabled) async {
+    if (_equalizerEnabled == enabled && _equalizerEngaged == enabled) return;
+    _equalizerEnabled = enabled;
+    final token = ++_bandFadeToken;
+    if (enabled) {
+      if (!_equalizerEngaged) {
+        // Bypassed, so landing on flat gains is inaudible.
+        await _writeBands(_flatGains());
+        if (token != _bandFadeToken) return;
+        await _equalizer.setEnabled(true);
+        _equalizerEngaged = true;
+      }
+      if (token != _bandFadeToken) return;
+      await _fadeBandsTo(_bandGains, token);
+    } else if (_equalizerEngaged) {
+      final reached = await _fadeBandsTo(_flatGains(), token);
+      if (!reached || token != _bandFadeToken) return;
+      await _equalizer.setEnabled(false);
+      _equalizerEngaged = false;
+    }
+  }
 
   @override
   Future<void> setBandGains(List<double> gainsDecibels) async {
@@ -342,20 +399,62 @@ class BiliAudioService extends BaseAudioHandler
   /// Pushes the requested gains onto the equalizer bands. Before the platform
   /// reports its layout there is nothing to push to, so the values are applied
   /// once [loadCapabilities] (or the engine itself) reveals the bands.
+  ///
+  /// While the equalizer is engaged the gains fade to their new values instead
+  /// of jumping, keeping sliders and preset switches click free as well.
   Future<void> _applyBandGains() async {
-    final parameters = _equalizerParameters;
-    if (parameters == null) return;
-    final gains = EqualizerPreset.resampleGains(
-      _bandGains,
-      _equalizerBands.length,
-    );
-    for (var i = 0; i < _equalizerBands.length; i++) {
-      final gain = gains[i].clamp(
-        parameters.minDecibels,
-        parameters.maxDecibels,
-      );
-      await _equalizerBands[i].setGain(gain.toDouble());
+    if (_equalizerParameters == null) return;
+    if (_equalizerEngaged && !_disposed) {
+      await _fadeBandsTo(_bandGains, ++_bandFadeToken);
+    } else {
+      // Bypassed: the write is inaudible and engaging fades in from flat.
+      await _writeBands(_gainsOnBands(_bandGains));
     }
+  }
+
+  /// The requested gains matched to the engine bands and their gain range.
+  List<double> _gainsOnBands(List<double> gainsDecibels) {
+    final parameters = _equalizerParameters!;
+    return [
+      for (final gain in EqualizerPreset.resampleGains(
+        gainsDecibels,
+        _equalizerBands.length,
+      ))
+        gain.clamp(parameters.minDecibels, parameters.maxDecibels).toDouble(),
+    ];
+  }
+
+  /// The neutral gains: with them the effect output matches its bypassed one.
+  List<double> _flatGains() => List.filled(_equalizerBands.length, 0.0);
+
+  /// Writes [gains] (already matched to the bands) in one go.
+  Future<void> _writeBands(List<double> gains) async {
+    for (var i = 0; i < _equalizerBands.length; i++) {
+      await _equalizerBands[i].setGain(gains[i]);
+    }
+    _appliedGains = List.of(gains);
+  }
+
+  /// Fades the band gains from their current values to [target].
+  ///
+  /// Returns `false` when a newer transition took over ([token] superseded) or
+  /// the service is gone before the target was reached; the caller must then
+  /// leave the effect state alone.
+  Future<bool> _fadeBandsTo(List<double> target, int token) async {
+    if (_equalizerParameters == null || _equalizerBands.isEmpty) return true;
+    final end = _gainsOnBands(target);
+    final start = _appliedGains.length == end.length
+        ? List.of(_appliedGains)
+        : List.of(end);
+    for (var step = 1; step <= _effectFadeSteps; step++) {
+      await Future<void>.delayed(_effectFadeStep);
+      if (_disposed || token != _bandFadeToken) return false;
+      await _writeBands([
+        for (var i = 0; i < end.length; i++)
+          start[i] + (end[i] - start[i]) * step / _effectFadeSteps,
+      ]);
+    }
+    return true;
   }
 
   /// Learns the equalizer layout in the background so the settings page can
@@ -373,13 +472,56 @@ class BiliAudioService extends BaseAudioHandler
     }
   }
 
+  /// Engages or bypasses the loudness enhancer without a click: the gain is
+  /// faded out before bypassing and faded back in after engaging.
   @override
-  Future<void> setLoudnessEnabled(bool enabled) =>
-      _loudnessEnhancer.setEnabled(enabled);
+  Future<void> setLoudnessEnabled(bool enabled) async {
+    if (_loudnessEnabled == enabled && _loudnessEngaged == enabled) return;
+    _loudnessEnabled = enabled;
+    final token = ++_loudnessFadeToken;
+    if (enabled) {
+      if (!_loudnessEngaged) {
+        // Bypassed, so landing on zero gain is inaudible.
+        await _loudnessEnhancer.setTargetGain(0);
+        _appliedLoudnessGain = 0;
+        if (token != _loudnessFadeToken) return;
+        await _loudnessEnhancer.setEnabled(true);
+        _loudnessEngaged = true;
+      }
+      if (token != _loudnessFadeToken) return;
+      await _fadeLoudnessTo(_loudnessGain, token);
+    } else if (_loudnessEngaged) {
+      final reached = await _fadeLoudnessTo(0, token);
+      if (!reached || token != _loudnessFadeToken) return;
+      await _loudnessEnhancer.setEnabled(false);
+      _loudnessEngaged = false;
+    }
+  }
 
   @override
-  Future<void> setLoudnessGain(double gainDecibels) =>
-      _loudnessEnhancer.setTargetGain(gainDecibels);
+  Future<void> setLoudnessGain(double gainDecibels) async {
+    _loudnessGain = gainDecibels;
+    if (_loudnessEngaged && !_disposed) {
+      await _fadeLoudnessTo(gainDecibels, ++_loudnessFadeToken);
+    } else {
+      // Bypassed: the write is inaudible and engaging fades in from zero.
+      await _loudnessEnhancer.setTargetGain(gainDecibels);
+      _appliedLoudnessGain = gainDecibels;
+    }
+  }
+
+  /// Fades the loudness gain to [target], mirroring [_fadeBandsTo].
+  Future<bool> _fadeLoudnessTo(double target, int token) async {
+    final start = _appliedLoudnessGain;
+    for (var step = 1; step <= _effectFadeSteps; step++) {
+      await Future<void>.delayed(_effectFadeStep);
+      if (_disposed || token != _loudnessFadeToken) return false;
+      final gain = start + (target - start) * step / _effectFadeSteps;
+      await _loudnessEnhancer.setTargetGain(gain);
+      _appliedLoudnessGain = gain;
+    }
+    return true;
+  }
 
   // --- Internal playback --------------------------------------------------
 
