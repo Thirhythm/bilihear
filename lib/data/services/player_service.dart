@@ -6,11 +6,14 @@ import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:bilihear/core/api/api_exception.dart';
 import 'package:bilihear/core/api/bili_client.dart';
+import 'package:bilihear/core/models/equalizer_capabilities.dart';
+import 'package:bilihear/core/models/equalizer_preset.dart';
 import 'package:bilihear/core/models/media_track.dart';
 import 'package:bilihear/core/models/play_mode.dart';
 import 'package:bilihear/core/models/player_state.dart';
 import 'package:bilihear/core/utils/image_url.dart';
 import 'package:bilihear/data/repositories/video_repository.dart';
+import 'package:bilihear/data/services/audio_effects.dart';
 // just_audio also exports a `PlayerState`, which collides with our model.
 import 'package:just_audio/just_audio.dart' hide PlayerState;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -25,7 +28,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// This class is the single source of truth for playback and broadcasts:
 /// * [stateStream] for the Flutter UI,
 /// * `playbackState` / `mediaItem` / `queue` for the system notification.
-class BiliAudioService extends BaseAudioHandler with SeekHandler {
+class BiliAudioService extends BaseAudioHandler
+    with SeekHandler
+    implements AudioEffects {
   BiliAudioService({
     required VideoRepository videoRepository,
     required SharedPreferences preferences,
@@ -33,6 +38,9 @@ class BiliAudioService extends BaseAudioHandler with SeekHandler {
        _prefs = preferences {
     unawaited(_configureSession());
     _restore();
+    // Brings the engine up silently so the equalizer reports its band layout
+    // (and any queued band gains can be applied) before anything is played.
+    unawaited(_warmUpEngine());
     _subscriptions.addAll([
       _player.playbackEventStream.listen((_) => playbackState.add(_buildPlaybackState())),
       _player.errorStream.listen(_onPlaybackError),
@@ -53,7 +61,27 @@ class BiliAudioService extends BaseAudioHandler with SeekHandler {
   /// Re-resolving a single track is allowed once after a playback error.
   static const int _maxAutoRetries = 1;
 
-  final AudioPlayer _player = AudioPlayer();
+  final AndroidEqualizer _equalizer = AndroidEqualizer();
+  final AndroidLoudnessEnhancer _loudnessEnhancer = AndroidLoudnessEnhancer();
+  late final AudioPlayer _player = AudioPlayer(
+    audioPipeline: AudioPipeline(
+      androidAudioEffects: [_equalizer, _loudnessEnhancer],
+    ),
+  );
+
+  /// Equalizer bands, filled once the platform reports its band layout.
+  List<AndroidEqualizerBand> _equalizerBands = const [];
+
+  /// Gain range of the platform equalizer, `null` until its layout is known.
+  AndroidEqualizerParameters? _equalizerParameters;
+
+  /// Last requested band gains, kept until there are bands to apply them to.
+  List<double> _bandGains = const [];
+
+  /// Whether the engine is loaded with the current queue entry. `false` while
+  /// it still holds the silent warm-up source or nothing at all.
+  bool _trackLoaded = false;
+
   final VideoRepository _videos;
   final SharedPreferences _prefs;
   final Random _random = Random();
@@ -112,6 +140,7 @@ class BiliAudioService extends BaseAudioHandler with SeekHandler {
   }) async {
     _queue = List.of(tracks);
     _currentIndex = _queue.isEmpty ? -1 : startIndex.clamp(0, _queue.length - 1);
+    _trackLoaded = false;
     _duration = currentTrack?.duration ?? Duration.zero;
     _error = null;
     _autoRetries = 0;
@@ -216,6 +245,7 @@ class BiliAudioService extends BaseAudioHandler with SeekHandler {
     _queue = [];
     _shuffleOrder = [];
     _currentIndex = -1;
+    _trackLoaded = false;
     _duration = Duration.zero;
     _error = null;
     _broadcastQueue();
@@ -240,12 +270,19 @@ class BiliAudioService extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> play() async {
     if (_queue.isEmpty) return;
-    if (_player.audioSource == null ||
-        _player.processingState == ProcessingState.completed) {
-      await _loadCurrent();
+    await _resume();
+  }
+
+  /// Starts playback, loading the current queue entry first when the engine is
+  /// not holding it yet — e.g. while it still holds the silent warm-up source.
+  Future<void> _resume() async {
+    if (_trackLoaded &&
+        _player.audioSource != null &&
+        _player.processingState != ProcessingState.completed) {
+      await _player.play();
       return;
     }
-    await _player.play();
+    await _loadCurrent();
   }
 
   @override
@@ -269,6 +306,80 @@ class BiliAudioService extends BaseAudioHandler with SeekHandler {
     await _player.seek(Duration.zero);
     _emit();
   }
+
+  // --- Sound effects ------------------------------------------------------
+
+  @override
+  Future<EqualizerCapabilities> loadCapabilities() async {
+    final parameters = await _equalizer.parameters;
+    _equalizerParameters = parameters;
+    _equalizerBands = parameters.bands;
+    await _applyBandGains();
+    return EqualizerCapabilities(
+      minDecibels: parameters.minDecibels,
+      maxDecibels: parameters.maxDecibels,
+      bands: [
+        for (final band in parameters.bands)
+          EqualizerBand(
+            lowerFrequency: band.lowerFrequency,
+            upperFrequency: band.upperFrequency,
+            centerFrequency: band.centerFrequency,
+          ),
+      ],
+    );
+  }
+
+  @override
+  Future<void> setEqualizerEnabled(bool enabled) =>
+      _equalizer.setEnabled(enabled);
+
+  @override
+  Future<void> setBandGains(List<double> gainsDecibels) async {
+    _bandGains = List.of(gainsDecibels);
+    await _applyBandGains();
+  }
+
+  /// Pushes the requested gains onto the equalizer bands. Before the platform
+  /// reports its layout there is nothing to push to, so the values are applied
+  /// once [loadCapabilities] (or the engine itself) reveals the bands.
+  Future<void> _applyBandGains() async {
+    final parameters = _equalizerParameters;
+    if (parameters == null) return;
+    final gains = EqualizerPreset.resampleGains(
+      _bandGains,
+      _equalizerBands.length,
+    );
+    for (var i = 0; i < _equalizerBands.length; i++) {
+      final gain = gains[i].clamp(
+        parameters.minDecibels,
+        parameters.maxDecibels,
+      );
+      await _equalizerBands[i].setGain(gain.toDouble());
+    }
+  }
+
+  /// Learns the equalizer layout in the background so the settings page can
+  /// show the device bands right away. The silent source is never played and
+  /// is replaced by [_loadCurrent] on the first playback.
+  Future<void> _warmUpEngine() async {
+    try {
+      await _player.setAudioSource(
+        SilenceAudioSource(duration: const Duration(seconds: 1)),
+      );
+      await loadCapabilities();
+    } catch (_) {
+      // A platform without silence sources (or effect support) simply keeps
+      // the reference band layout; playback is unaffected.
+    }
+  }
+
+  @override
+  Future<void> setLoudnessEnabled(bool enabled) =>
+      _loudnessEnhancer.setEnabled(enabled);
+
+  @override
+  Future<void> setLoudnessGain(double gainDecibels) =>
+      _loudnessEnhancer.setTargetGain(gainDecibels);
 
   // --- Internal playback --------------------------------------------------
 
@@ -309,6 +420,7 @@ class BiliAudioService extends BaseAudioHandler with SeekHandler {
       await _player.setAudioSource(
         AudioSource.uri(uri, headers: _streamHeaders),
       );
+      _trackLoaded = true;
 
       _duration = source.duration ?? resolved.duration;
       if (_duration <= Duration.zero) {
@@ -362,7 +474,7 @@ class BiliAudioService extends BaseAudioHandler with SeekHandler {
     if (_queue.isEmpty) return;
     if (_queue.length == 1) {
       await _player.seek(Duration.zero);
-      await _player.play();
+      await _resume();
       return;
     }
     final index = _nextIndex();
@@ -449,6 +561,12 @@ class BiliAudioService extends BaseAudioHandler with SeekHandler {
   }
 
   void _onProcessingState(ProcessingState state) {
+    if (!_trackLoaded) {
+      // The silent warm-up load is not something the UI should show as
+      // buffering, and it never completes a track.
+      _lastProcessingState = state;
+      return;
+    }
     final buffering =
         state == ProcessingState.loading || state == ProcessingState.buffering;
     if (buffering != _buffering) {

@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:bilihear/core/models/app_theme_mode.dart';
+import 'package:bilihear/core/models/audio_effect_settings.dart';
+import 'package:bilihear/core/models/json_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// App preferences that are not tied to a Bilibili session.
@@ -7,6 +11,7 @@ class SettingsRepository {
 
   static const String _autoOpenPlayerKey = 'settings_auto_open_player_v1';
   static const String _themeModeKey = 'settings_theme_mode_v1';
+  static const String _audioEffectsKey = 'settings_audio_effects_v1';
 
   final SharedPreferences _prefs;
 
@@ -22,4 +27,18 @@ class SettingsRepository {
 
   Future<void> setThemeMode(AppThemeMode mode) =>
       _prefs.setString(_themeModeKey, mode.name);
+
+  /// Equalizer and loudness enhancer preferences.
+  AudioEffectSettings loadAudioEffects() {
+    final raw = _prefs.getString(_audioEffectsKey);
+    if (raw == null || raw.isEmpty) return const AudioEffectSettings();
+    try {
+      return AudioEffectSettings.fromJson(JsonUtils.map(jsonDecode(raw)));
+    } on FormatException {
+      return const AudioEffectSettings();
+    }
+  }
+
+  Future<void> setAudioEffects(AudioEffectSettings settings) =>
+      _prefs.setString(_audioEffectsKey, jsonEncode(settings.toJson()));
 }

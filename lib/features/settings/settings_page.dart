@@ -1,5 +1,6 @@
 import 'package:bilihear/core/models/app_theme_mode.dart';
 import 'package:bilihear/features/settings/about_page.dart';
+import 'package:bilihear/features/settings/effects_page.dart';
 import 'package:bilihear/state/settings_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,6 +48,15 @@ class SettingsPage extends ConsumerWidget {
                 ],
               ),
             ),
+          ),
+          const Divider(height: 1),
+          ListTile(
+            leading: const Icon(Icons.equalizer_rounded),
+            title: const Text('均衡器'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () => Navigator.of(
+              context,
+            ).push(MaterialPageRoute<void>(builder: (_) => const EffectsPage())),
           ),
           const Divider(height: 1),
           ListTile(

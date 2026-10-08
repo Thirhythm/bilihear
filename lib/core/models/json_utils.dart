@@ -28,6 +28,18 @@ abstract final class JsonUtils {
     return fallback;
   }
 
+  static double decimal(Object? value, {double fallback = 0.0}) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? fallback;
+    return fallback;
+  }
+
+  /// Reads a nested list of numbers, skipping entries of the wrong shape.
+  static List<double> doubles(Object? value) {
+    if (value is! List) return const [];
+    return [for (final item in value) if (item is num) item.toDouble()];
+  }
+
   /// Reads a nested map, returning an empty map when absent.
   static Map<String, dynamic> map(Object? value) {
     if (value is Map) {

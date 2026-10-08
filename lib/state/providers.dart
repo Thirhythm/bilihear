@@ -7,6 +7,7 @@ import 'package:bilihear/data/repositories/local_history_repository.dart';
 import 'package:bilihear/data/repositories/search_repository.dart';
 import 'package:bilihear/data/repositories/settings_repository.dart';
 import 'package:bilihear/data/repositories/video_repository.dart';
+import 'package:bilihear/data/services/audio_effects.dart';
 import 'package:bilihear/data/services/player_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -29,6 +30,12 @@ final Provider<BiliAudioService> audioServiceProvider =
     Provider<BiliAudioService>(
       (ref) => throw StateError('audioServiceProvider must be overridden'),
     );
+
+/// Sound-effect surface of the audio service, split out so tests can fake the
+/// engine without constructing a real [BiliAudioService].
+final Provider<AudioEffects> audioEffectsProvider = Provider<AudioEffects>(
+  (ref) => ref.watch(audioServiceProvider),
+);
 
 // --- Repositories ---------------------------------------------------------
 

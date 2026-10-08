@@ -33,4 +33,20 @@ abstract final class Formatters {
     if (difference.inDays < 365) return '${(difference.inDays / 30).floor()}个月前';
     return '${(difference.inDays / 365).floor()}年前';
   }
+
+  /// Frequency label such as `230Hz` or `3.6kHz`.
+  static String frequency(double hertz) {
+    if (hertz < 1000) return '${hertz.round()}Hz';
+    final kiloHertz = hertz / 1000;
+    final text = kiloHertz >= 10
+        ? kiloHertz.round().toString()
+        : kiloHertz.toStringAsFixed(1);
+    return '${text}kHz';
+  }
+
+  /// Signed decibel label such as `+3.0dB` or `-1.5dB`.
+  static String decibels(double value) {
+    final sign = value >= 0 ? '+' : '';
+    return '$sign${value.toStringAsFixed(1)}dB';
+  }
 }

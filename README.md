@@ -14,7 +14,7 @@
 - [x] 收藏夹
 - [x] 历史记录
 - [x] Android 媒体控制
-- [ ] 均衡器
+- [x] 音效/均衡器
 - [x] 深色模式
 
 > [!WARNING]
@@ -24,7 +24,7 @@
 
 - **状态管理**：[flutter_riverpod](https://pub.dev/packages/flutter_riverpod) 3.x（`Notifier` / `AsyncNotifier`，无代码生成）
 - **网络**：`dio` + 自实现 Cookie Jar（`SharedPreferences` 持久化）+ WBI 签名 + 极验人机验证（`webview_flutter`）
-- **播放**：`just_audio`（仅加载音频流）
+- **播放**：`just_audio`（仅加载音频流）+ Android 音效管线（`AndroidEqualizer` 均衡器 / `AndroidLoudnessEnhancer` 响度增强）
 - **后台与通知**：`audio_service`（Android 前台服务 + MediaStyle 通知）
 - **音频焦点**：`audio_session`
 - **其他**：`cached_network_image`、`qr_flutter`、`intl`、`crypto`
