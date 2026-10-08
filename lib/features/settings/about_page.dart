@@ -6,7 +6,7 @@ class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
 
   /// Keep in sync with `version` in pubspec.yaml.
-  static const String appVersion = '1.1.0';
+  static const String appVersion = '1.2.0';
 
   static const String developerName = 'Thirhythm';
 
@@ -31,6 +31,11 @@ class AboutPage extends StatelessWidget {
             title: '开发者',
             subtitle: developerName,
             url: developerUrl,
+          ),
+          const ListTile(
+            leading: Icon(Icons.gavel_outlined),
+            title: Text('开源协议'),
+            subtitle: Text('GPLv3'),
           ),
           _LinkTile(
             icon: Icons.code_rounded,
