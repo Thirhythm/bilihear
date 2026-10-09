@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:bilihear/core/api/api_exception.dart';
 import 'package:bilihear/core/models/fav_folder.dart';
 import 'package:bilihear/core/models/media_track.dart';
+import 'package:bilihear/core/models/recent_folder.dart';
 import 'package:bilihear/features/player/player_navigation.dart';
 import 'package:bilihear/state/library_controllers.dart';
+import 'package:bilihear/state/local_recent_folders_controller.dart';
 import 'package:bilihear/state/player_controller.dart';
 import 'package:bilihear/state/providers.dart';
 import 'package:bilihear/widgets/player_scaffold.dart';
@@ -44,6 +48,26 @@ class _FolderDetailPageState extends ConsumerState<FolderDetailPage> {
     if (position.pixels >= position.maxScrollExtent - 400) {
       ref.read(favMediaProvider(widget.folder.id).notifier).loadMore();
     }
+  }
+
+  /// Remembers the folder so the home page can offer it as a shortcut.
+  ///
+  /// The cover is the folder's first entry at the time it was played, which is
+  /// what the account shows for a folder cover as well.
+  void _recordRecentFolder(List<MediaTrack> items) {
+    final cover = items.isEmpty ? '' : items.first.cover;
+    unawaited(
+      ref
+          .read(localRecentFoldersProvider.notifier)
+          .record(
+            RecentFolder(
+              id: widget.folder.id,
+              title: widget.folder.title,
+              cover: cover,
+              mediaCount: widget.folder.mediaCount,
+            ),
+          ),
+    );
   }
 
   Future<void> _removeTrack(MediaTrack track) async {
@@ -98,7 +122,10 @@ class _FolderDetailPageState extends ConsumerState<FolderDetailPage> {
               : IconButton(
                   tooltip: '播放全部',
                   icon: const Icon(Icons.play_circle_outline_rounded),
-                  onPressed: () => player.playTracks(page.items),
+                  onPressed: () {
+                    _recordRecentFolder(page.items);
+                    player.playTracks(page.items);
+                  },
                 ),
           orElse: () => const SizedBox.shrink(),
         ),
@@ -144,6 +171,7 @@ class _FolderDetailPageState extends ConsumerState<FolderDetailPage> {
                   return TrackTile(
                     track: track,
                     onTap: () async {
+                      _recordRecentFolder(page.items);
                       await player.playTracks(page.items, startIndex: index);
                       if (!context.mounted) return;
                       await openPlayerIfEnabled(context, ref);

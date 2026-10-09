@@ -328,9 +328,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // Five reference bands and the loudness slider, without waiting for the
-    // engine to report its layout.
+    // engine to report its layout: the reference bands are shown right away
+    // instead of a pending-layout hint.
     expect(find.text('3.6kHz'), findsOneWidget);
-    expect(find.text('正在读取设备频段…'), findsOneWidget);
     expect(find.byType(Slider), findsNWidgets(6));
 
     await tester.tap(find.text('启用均衡器'));
@@ -350,7 +350,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('3.6kHz'), findsNothing);
-    expect(find.text('正在读取设备频段…'), findsNothing);
     expect(find.byType(Slider), findsNWidgets(4));
     expect(effects.bandGains[0], greaterThan(0));
   });

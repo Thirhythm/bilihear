@@ -1,15 +1,20 @@
 import 'package:bilihear/core/models/media_track.dart';
+import 'package:bilihear/core/models/recent_folder.dart';
+import 'package:bilihear/features/library/folder_detail_page.dart';
 import 'package:bilihear/features/player/player_navigation.dart';
 import 'package:bilihear/state/auth_controller.dart';
 import 'package:bilihear/state/local_history_controller.dart';
+import 'package:bilihear/state/local_recent_folders_controller.dart';
 import 'package:bilihear/state/player_controller.dart';
+import 'package:bilihear/widgets/cover_image.dart';
 import 'package:bilihear/widgets/section_header.dart';
 import 'package:bilihear/widgets/track_action_menu.dart';
 import 'package:bilihear/widgets/track_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Landing page: the six most recently played tracks.
+/// Landing page: the favourite folders played recently plus the six most
+/// recently played tracks.
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
 
@@ -24,11 +29,114 @@ class HomePage extends ConsumerWidget {
           padding: const EdgeInsets.only(bottom: 24),
           children: const [
             SectionHeader(title: '最近播放'),
+            _RecentFolders(),
             _RecentPlays(),
           ],
         ),
       ),
     );
+  }
+}
+
+/// Favourite folders played recently, shown as large cover shortcuts at the
+/// top of 最近播放. Hidden until one has been played from.
+class _RecentFolders extends ConsumerWidget {
+  const _RecentFolders();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final folders = ref.watch(localRecentFoldersProvider);
+    if (folders.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      height: 168,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        itemCount: folders.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        itemBuilder: (context, index) =>
+            _RecentFolderCard(folder: folders[index]),
+      ),
+    );
+  }
+}
+
+class _RecentFolderCard extends ConsumerWidget {
+  const _RecentFolderCard({required this.folder});
+
+  static const double coverWidth = 160;
+  static const double coverHeight = 100;
+
+  final RecentFolder folder;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: coverWidth,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => FolderDetailPage(folder: folder.toFolder()),
+          ),
+        ),
+        onLongPress: () => _confirmRemove(context, ref),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CoverImage(
+              url: folder.cover,
+              width: coverWidth,
+              height: coverHeight,
+              radius: 12,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              folder.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${folder.mediaCount} 个内容',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Asks before dropping the shortcut; the folder itself stays untouched.
+  Future<void> _confirmRemove(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('移除收藏夹'),
+        content: Text('确定将「${folder.title}」从最近播放的收藏夹中移除吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('移除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed ?? false) {
+      await ref.read(localRecentFoldersProvider.notifier).remove(folder);
+    }
   }
 }
 

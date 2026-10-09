@@ -4,6 +4,7 @@ import 'package:bilihear/data/repositories/fav_repository.dart';
 import 'package:bilihear/data/repositories/history_repository.dart';
 import 'package:bilihear/data/repositories/local_favorites_repository.dart';
 import 'package:bilihear/data/repositories/local_history_repository.dart';
+import 'package:bilihear/data/repositories/local_recent_folders_repository.dart';
 import 'package:bilihear/data/repositories/search_repository.dart';
 import 'package:bilihear/data/repositories/settings_repository.dart';
 import 'package:bilihear/data/repositories/video_repository.dart';
@@ -74,6 +75,12 @@ final Provider<LocalFavoritesRepository> localFavoritesRepositoryProvider =
     Provider<LocalFavoritesRepository>(
       (ref) => LocalFavoritesRepository(ref.watch(sharedPreferencesProvider)),
     );
+
+/// On-device record of the favourite folders played from.
+final Provider<LocalRecentFoldersRepository>
+localRecentFoldersRepositoryProvider = Provider<LocalRecentFoldersRepository>(
+  (ref) => LocalRecentFoldersRepository(ref.watch(sharedPreferencesProvider)),
+);
 
 /// On-device app preferences.
 final Provider<SettingsRepository> settingsRepositoryProvider =
