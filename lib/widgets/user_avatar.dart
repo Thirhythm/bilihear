@@ -13,11 +13,19 @@ class UserAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final resolved = ImageUrl.resolve(url, width: size <= 96 ? 180 : 512);
+    // Decode at the rendered resolution so avatars cost little image-cache
+    // memory even on high pixel-ratio screens.
+    final decodeWidth = (size * MediaQuery.devicePixelRatioOf(context)).ceil();
 
     return CircleAvatar(
       radius: size / 2,
       backgroundColor: scheme.surfaceContainerHighest,
-      foregroundImage: resolved == null ? null : CachedNetworkImageProvider(resolved),
+      foregroundImage: resolved == null
+          ? null
+          : ResizeImage(
+              CachedNetworkImageProvider(resolved),
+              width: decodeWidth,
+            ),
       child: Icon(
         Icons.person_rounded,
         size: size * 0.6,

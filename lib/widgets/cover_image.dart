@@ -22,6 +22,9 @@ class CoverImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final resolved = ImageUrl.resolve(url, width: _requestedWidth);
+    // Decode the bitmap at the rendered resolution instead of the downloaded
+    // one, so list thumbnails stay tiny inside the image cache.
+    final decodeWidth = (size * MediaQuery.devicePixelRatioOf(context)).ceil();
 
     Widget fallback() => ColoredBox(
       color: scheme.surfaceContainerHighest,
@@ -42,6 +45,7 @@ class CoverImage extends StatelessWidget {
             : CachedNetworkImage(
                 imageUrl: resolved,
                 fit: BoxFit.cover,
+                memCacheWidth: decodeWidth,
                 fadeInDuration: const Duration(milliseconds: 150),
                 placeholder: (_, _) => fallback(),
                 errorWidget: (_, _, _) => fallback(),

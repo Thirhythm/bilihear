@@ -11,6 +11,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Covers decode at their rendered size, so the 100 MB default bitmap cache
+  // is far more than this player (thumbnails plus one artwork) ever needs.
+  PaintingBinding.instance.imageCache
+    ..maximumSizeBytes = 32 << 20
+    ..maximumSize = 300;
+
   // Restores the cookie jar and prepares the anonymous device identity.
   final client = await BiliClient.create();
   final preferences = await SharedPreferences.getInstance();

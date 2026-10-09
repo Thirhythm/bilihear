@@ -42,7 +42,9 @@ class BiliAudioService extends BaseAudioHandler
     // (and any queued band gains can be applied) before anything is played.
     unawaited(_warmUpEngine());
     _subscriptions.addAll([
-      _player.playbackEventStream.listen((_) => playbackState.add(_buildPlaybackState())),
+      _player.playbackEventStream.listen(
+        (_) => playbackState.add(_buildPlaybackState()),
+      ),
       _player.errorStream.listen(_onPlaybackError),
       _player.processingStateStream.listen(_onProcessingState),
       _player.playingStream.listen((_) => _emit()),
@@ -64,6 +66,19 @@ class BiliAudioService extends BaseAudioHandler
   /// Steps of the gain fades that keep effect toggles click free.
   static const int _effectFadeSteps = 6;
 
+  /// Streaming buffers sized for music: the platform defaults keep ~50s of
+  /// audio ahead, which adds up on long queues without ever being heard.
+  static const AudioLoadConfiguration _loadConfiguration =
+      AudioLoadConfiguration(
+        androidLoadControl: AndroidLoadControl(
+          minBufferDuration: Duration(seconds: 15),
+          maxBufferDuration: Duration(seconds: 30),
+        ),
+        darwinLoadControl: DarwinLoadControl(
+          preferredForwardBufferDuration: Duration(seconds: 30),
+        ),
+      );
+
   /// Delay between two fade steps, making for ~30ms per fade in total.
   static const Duration _effectFadeStep = Duration(milliseconds: 5);
 
@@ -73,6 +88,7 @@ class BiliAudioService extends BaseAudioHandler
     audioPipeline: AudioPipeline(
       androidAudioEffects: [_equalizer, _loudnessEnhancer],
     ),
+    audioLoadConfiguration: _loadConfiguration,
   );
 
   /// Equalizer bands, filled once the platform reports its band layout.
@@ -172,7 +188,9 @@ class BiliAudioService extends BaseAudioHandler
     bool autoPlay = true,
   }) async {
     _queue = List.of(tracks);
-    _currentIndex = _queue.isEmpty ? -1 : startIndex.clamp(0, _queue.length - 1);
+    _currentIndex = _queue.isEmpty
+        ? -1
+        : startIndex.clamp(0, _queue.length - 1);
     _trackLoaded = false;
     _duration = currentTrack?.duration ?? Duration.zero;
     _error = null;
@@ -654,7 +672,9 @@ class BiliAudioService extends BaseAudioHandler
         }
         if (position + 1 >= _shuffleOrder.length) {
           _rebuildShuffleOrder(lead: _currentIndex);
-          return _shuffleOrder.length > 1 ? _shuffleOrder[1] : _shuffleOrder.first;
+          return _shuffleOrder.length > 1
+              ? _shuffleOrder[1]
+              : _shuffleOrder.first;
         }
         return _shuffleOrder[position + 1];
     }
