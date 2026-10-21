@@ -21,14 +21,13 @@ class HomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      appBar: AppBar(title: const Text('哔哩听见')),
+      appBar: AppBar(title: const Text('最近播放')),
       body: RefreshIndicator(
         onRefresh: () => ref.read(authControllerProvider.notifier).refresh(),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.only(bottom: 24),
           children: const [
-            SectionHeader(title: '最近播放'),
             _RecentFolders(),
             _RecentPlays(),
           ],
