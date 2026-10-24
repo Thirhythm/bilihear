@@ -7,7 +7,6 @@ import 'package:bilihear/state/local_history_controller.dart';
 import 'package:bilihear/state/local_recent_folders_controller.dart';
 import 'package:bilihear/state/player_controller.dart';
 import 'package:bilihear/widgets/cover_image.dart';
-import 'package:bilihear/widgets/section_header.dart';
 import 'package:bilihear/widgets/track_action_menu.dart';
 import 'package:bilihear/widgets/track_tile.dart';
 import 'package:flutter/material.dart';

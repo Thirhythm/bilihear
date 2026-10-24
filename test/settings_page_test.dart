@@ -53,10 +53,10 @@ void main() {
     await tester.pumpWidget(_wrap(prefs, const SettingsPage()));
     await tester.pumpAndSettle();
 
-    final switchTile = find.byType(SwitchListTile);
+    final switchTile = find.widgetWithText(SwitchListTile, '点击曲目后自动打开播放器');
     expect(tester.widget<SwitchListTile>(switchTile).value, isFalse);
 
-    await tester.tap(find.text('点击曲目后自动打开播放器'));
+    await tester.tap(switchTile);
     await tester.pumpAndSettle();
 
     expect(tester.widget<SwitchListTile>(switchTile).value, isTrue);
@@ -68,7 +68,39 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+      tester
+          .widget<SwitchListTile>(
+            find.widgetWithText(SwitchListTile, '点击曲目后自动打开播放器'),
+          )
+          .value,
+      isTrue,
+    );
+  });
+
+  testWidgets('动态取色 defaults to off and is persisted', (tester) async {
+    final prefs = await _freshPrefs();
+    await tester.pumpWidget(_wrap(prefs, const SettingsPage()));
+    await tester.pumpAndSettle();
+
+    final switchTile = find.widgetWithText(SwitchListTile, '动态取色');
+    expect(tester.widget<SwitchListTile>(switchTile).value, isFalse);
+    expect(SettingsRepository(prefs).loadDynamicColor(), isFalse);
+
+    await tester.tap(switchTile);
+    await tester.pumpAndSettle();
+
+    expect(tester.widget<SwitchListTile>(switchTile).value, isTrue);
+    expect(SettingsRepository(prefs).loadDynamicColor(), isTrue);
+
+    // A fresh provider container reads the stored value back.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(_wrap(prefs, const SettingsPage()));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<SwitchListTile>(find.widgetWithText(SwitchListTile, '动态取色'))
+          .value,
       isTrue,
     );
   });

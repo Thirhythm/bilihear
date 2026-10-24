@@ -13,6 +13,7 @@ class SettingsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final autoOpenPlayer = ref.watch(autoOpenPlayerProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final dynamicColor = ref.watch(dynamicColorProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('设置')),
@@ -57,6 +58,15 @@ class SettingsPage extends ConsumerWidget {
                 ],
               ),
             ),
+          ),
+          const Divider(height: 1),
+          SwitchListTile(
+            secondary: const Icon(Icons.palette_outlined),
+            title: const Text('动态取色'),
+            subtitle: const Text('跟随系统壁纸或强调色生成主题配色'),
+            value: dynamicColor,
+            onChanged: (value) =>
+                ref.read(dynamicColorProvider.notifier).setEnabled(value),
           ),
           const Divider(height: 1),
           ListTile(

@@ -33,3 +33,17 @@ class ThemeModeController extends Notifier<AppThemeMode> {
     if (ref.mounted) state = mode;
   }
 }
+
+/// Whether the theme follows the system wallpaper/accent colour.
+final NotifierProvider<DynamicColorController, bool> dynamicColorProvider =
+    NotifierProvider<DynamicColorController, bool>(DynamicColorController.new);
+
+class DynamicColorController extends Notifier<bool> {
+  @override
+  bool build() => ref.watch(settingsRepositoryProvider).loadDynamicColor();
+
+  Future<void> setEnabled(bool value) async {
+    await ref.read(settingsRepositoryProvider).setDynamicColor(value);
+    if (ref.mounted) state = value;
+  }
+}

@@ -11,6 +11,7 @@ class SettingsRepository {
 
   static const String _autoOpenPlayerKey = 'settings_auto_open_player_v1';
   static const String _themeModeKey = 'settings_theme_mode_v1';
+  static const String _dynamicColorKey = 'settings_dynamic_color_v1';
   static const String _audioEffectsKey = 'settings_audio_effects_v1';
 
   final SharedPreferences _prefs;
@@ -27,6 +28,12 @@ class SettingsRepository {
 
   Future<void> setThemeMode(AppThemeMode mode) =>
       _prefs.setString(_themeModeKey, mode.name);
+
+  /// Whether the theme should follow the system wallpaper/accent colour.
+  bool loadDynamicColor() => _prefs.getBool(_dynamicColorKey) ?? false;
+
+  Future<void> setDynamicColor(bool value) =>
+      _prefs.setBool(_dynamicColorKey, value);
 
   /// Equalizer and loudness enhancer preferences.
   AudioEffectSettings loadAudioEffects() {
